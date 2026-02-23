@@ -7,12 +7,13 @@ This branch contains initial firmware testing for:
 - PlatformIO project structure
 
 Pin mapping used:
-VCC       → 3.3V
+
 D0 (SCK)  → GPIO 11  
 D1 (MOSI) → GPIO 10  
 CS        → GPIO 7  
 DC        → GPIO 8  
 RES       → GPIO 9  
+VCC       → 3.3V
 
 Library: U8g2  
 Framework: Arduino (PlatformIO)
