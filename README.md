@@ -7,7 +7,7 @@ This branch contains initial firmware testing for:
 - PlatformIO project structure
 
 Pin mapping used:
-
+VCC       → 3.3V
 D0 (SCK)  → GPIO 11  
 D1 (MOSI) → GPIO 10  
 CS        → GPIO 7  
