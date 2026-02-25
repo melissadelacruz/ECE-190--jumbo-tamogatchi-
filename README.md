@@ -8,12 +8,22 @@ This branch contains initial firmware testing for:
 
 Pin mapping used:
 
+Screen:  
 D0 (SCK)  → GPIO 11  
 D1 (MOSI) → GPIO 10  
 CS        → GPIO 7  
 DC        → GPIO 8  
 RES       → GPIO 9  
 VCC       → 3.3V
+
+Buttons:  
+One End → GND  
+Other End → GPIO 5  
+
+One End → GND  
+Other End GPIO 4
+
+
 
 Library: U8g2  
 Framework: Arduino (PlatformIO)
