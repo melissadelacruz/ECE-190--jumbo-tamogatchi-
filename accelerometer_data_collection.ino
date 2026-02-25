@@ -9,7 +9,7 @@ void setup() {
   Serial.begin(115200);
   
   // Custom I2C pins for ESP32-S3
-  Wire.begin(7, 8); 
+  Wire.begin(15, 16); //7 for scl and 8 for sda (clock and data)
 
   if (!mpu.begin()) {
     Serial.println("Failed to find MPU6050 chip");
