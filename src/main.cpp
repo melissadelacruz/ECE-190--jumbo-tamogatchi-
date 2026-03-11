@@ -1,17 +1,13 @@
 #include <Arduino.h>
 #include "display/display.h"
 
-void setup()
-{
-    Serial.begin(115200);
-    delay(500);
-
+void setup() {
     display_init();
-    display_drawHello();
-
-    Serial.println("System Initialized");
+    setup_buttons();
 }
 
-void loop()
-{
+void loop() {
+    check_buttons();
+    display_drawHello();
+    delay(10);
 }
