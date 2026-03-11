@@ -17,11 +17,14 @@ RES       → GPIO 9
 VCC       → 3.3V
 
 Buttons:  
-One End → GND  
-Other End → GPIO 5  
+Feed Button End → GND  
+Other End → GPIO 4  
 
-One End → GND  
-Other End GPIO 4
+Play Button End → GND  
+Other End → GPIO 5
+
+Bed Button End GNF
+Other End → GPIO 6
 
 
 
