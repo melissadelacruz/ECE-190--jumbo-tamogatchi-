@@ -9,18 +9,27 @@ static const int PIN_RES  = 9;
 static const int PIN_DC   = 8;
 static const int PIN_CS   = 7;
 
-
-
 //button pins
 static const int BTN_FEED = 4;
 static const int BTN_PLAY = 5;
 static const int BTN_BED  = 6;
 
+// animation variables
+int petYOffset = 0;
+bool goingUp = true;
+unsigned long lastAnim = 0;
+
 // global variables
 bool showHeart = false;
+bool isSleeping = false;
+bool isWalking = false;
+bool playMode = false;
 unsigned long heartTimer = 0;
 int hungerLevel = 4; // Start with some hunger
-bool isSleeping = false;
+unsigned long walkTimer = 0;
+
+extern int stepCount;
+extern int happiness;
 
 
 U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI
@@ -111,26 +120,53 @@ void setup_buttons() {
 
 void check_buttons() {
     // Play Button -> Heart
+    // if (digitalRead(BTN_PLAY) == LOW) {
+    //     showHeart = true;
+    //     heartTimer = millis();
+    //     delay(200); 
+    // }
     if (digitalRead(BTN_PLAY) == LOW) {
-        showHeart = true;
-        heartTimer = millis();
-        delay(200); 
-    }
+    Serial.println("PLAY MODE");
+
+    playMode = true;        // 👈 switch UI
+    isWalking = true;
+    walkTimer = millis();
+
+    showHeart = true;
+    heartTimer = millis();
+}
 
     // Feed Button -> Increase Hunger Bar
     if (digitalRead(BTN_FEED) == LOW) {
         if (hungerLevel < 6) hungerLevel++;
-        delay(200);
     }
 
     // Sleep Button -> Turn off screen for a couple of seconds and display "zzz"
     if (digitalRead(BTN_BED) == LOW) {
         isSleeping = !isSleeping; // Toggle sleep on/off
-        delay(300); 
     }
 }
 
-void display_drawHello() {
+void updatePetAnimation(bool isWalking) {
+    if (!isWalking) {
+        petYOffset = 0;
+        return;
+    }
+
+    if (millis() - lastAnim > 150) {
+        lastAnim = millis();
+
+        if (goingUp) {
+            petYOffset = -2;
+            goingUp = false;
+        } else {
+            petYOffset = 0;
+            goingUp = true;
+        }
+    }
+}
+
+void display_Homepage() {
     char hungerBar[8];
     for (int i = 0; i < 6; ++i) {
         hungerBar[i] = (i < hungerLevel) ? '#' : '-';
@@ -144,11 +180,28 @@ void display_drawHello() {
     u8g2.drawStr(4, 11, "Hunger:");
     u8g2.drawStr(48, 11, hungerBar);
 
-    drawPetSprite(48, 18);
+    if (playMode) {
+        // Steps taken by user
+        char stepStr[20];
+        sprintf(stepStr, "Steps: %d", stepCount);
+        u8g2.drawStr(4, 25, stepStr);
 
-    u8g2.drawStr(7, 61, "Feed");
-    u8g2.drawStr(50, 61, "Play");
-    u8g2.drawStr(95, 61, "Bed");
+        // Happiness meter
+        u8g2.drawStr(4, 40, "Mood:");
+
+        for (int i = 0; i < happiness && i < 5; i++) {
+            u8g2.drawStr(50 + i*10, 40, "<3");
+        }
+    }
+
+    updatePetAnimation(isWalking);
+    drawPetSprite(48, 18 + petYOffset);
+
+    if (!playMode) {
+        u8g2.drawStr(7, 61, "Feed");
+        u8g2.drawStr(50, 61, "Play");
+        u8g2.drawStr(95, 61, "Bed");
+    }
 
     if (showHeart) {
         u8g2.drawXBMP(82, 16, 8, 8, HEART_BITMAP);

@@ -8,6 +8,7 @@ extern bool showHeart;
 extern unsigned long heartTimer;
 
 void display_init();
-void display_drawHello();
+void display_Homepage();
+void updatePetAnimation(bool isWalking);
 void setup_buttons();
 void check_buttons();
