@@ -32,6 +32,17 @@ unsigned long walkTimer = 0;
 extern int stepCount;
 extern int happiness;
 
+//time variables
+int displayHours = 0;
+int displayMinutes = 0;
+bool displayPM = false;
+
+
+int displayMonth = 0;
+int displayDay = 0;
+
+
+
 
 U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI
 u8g2(U8G2_R0, PIN_CS, PIN_DC, PIN_RES);
@@ -80,6 +91,19 @@ static const uint8_t HEART_BITMAP[] = {
 };
 
 //functions
+
+void display_setDate(int m, int d) {
+    displayMonth = m;
+    displayDay = d;
+}
+
+void display_setTime(int h, int m, bool isPM) {
+    displayHours = h;
+    displayMinutes = m;
+    displayPM = isPM;
+}
+
+
 static void drawPetSprite(int x, int y)
 {
     // 1. Draw the white body silhouette
@@ -118,6 +142,7 @@ void setup_buttons() {
     pinMode(BTN_PLAY, INPUT_PULLUP);
     pinMode(BTN_BED,  INPUT_PULLUP);
 }
+
 
 void check_buttons() {
     // Play Button -> Increase Heart Meter through Pedometer
@@ -173,19 +198,26 @@ void updatePetAnimation(bool isWalking) {
     }
 }
 
-void display_Homepage() {
-    char hungerBar[8];
-    for (int i = 0; i < 6; ++i) {
-        hungerBar[i] = (i < hungerLevel) ? '#' : '-';
-    }
-    hungerBar[6] = '\0';
 
+void display_Homepage() {
+    
     u8g2.clearBuffer();
     u8g2.drawFrame(0, 0, 128, 64);
     
     u8g2.setFont(u8g2_font_6x10_tr);
-    u8g2.drawStr(4, 11, "Hunger:");
-    u8g2.drawStr(48, 11, hungerBar);
+
+    //time UI
+    char timeStr[20];
+    sprintf(timeStr, "%d:%02d %s",
+            displayHours,
+            displayMinutes,
+            displayPM ? "PM" : "AM");
+    u8g2.drawStr(4, 12, timeStr);
+
+    //date UI
+    char dateStr[20];
+    sprintf(dateStr, "%02d/%02d", displayMonth, displayDay);
+    u8g2.drawStr(4, 26, dateStr);
 
     if (playMode) {
         // Steps taken by user

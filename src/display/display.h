@@ -12,3 +12,5 @@ void display_Homepage();
 void updatePetAnimation(bool isWalking);
 void setup_buttons();
 void check_buttons();
+void display_setTime(int h, int m, bool isPM);
+void display_setDate(int month, int day);
