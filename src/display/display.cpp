@@ -195,7 +195,12 @@ void display_Homepage() {
     }
 
     updatePetAnimation(isWalking);
-    drawPetSprite(48, 18 + petYOffset);
+    int petX = playMode ? 80 : 48;
+    drawPetSprite(petX, 18 + petYOffset);
+
+    //pet walking to right
+    int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
+    drawPetSprite(petX + walkShift, 18 + petYOffset);
 
     if (!playMode) {
         u8g2.drawStr(7, 61, "Feed");
