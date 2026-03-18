@@ -24,6 +24,7 @@ bool showHeart = false;
 bool isSleeping = false;
 bool isWalking = false;
 bool playMode = false;
+bool lastPlayState = HIGH;
 unsigned long heartTimer = 0;
 int hungerLevel = 4; // Start with some hunger
 unsigned long walkTimer = 0;
@@ -119,22 +120,28 @@ void setup_buttons() {
 }
 
 void check_buttons() {
-    // Play Button -> Heart
-    // if (digitalRead(BTN_PLAY) == LOW) {
-    //     showHeart = true;
-    //     heartTimer = millis();
-    //     delay(200); 
-    // }
-    if (digitalRead(BTN_PLAY) == LOW) {
-    Serial.println("PLAY MODE");
+    // Play Button -> Increase Heart Meter through Pedometer
+    bool currentPlayState = digitalRead(BTN_PLAY);
 
-    playMode = true;        // 👈 switch UI
-    isWalking = true;
-    walkTimer = millis();
+    if (lastPlayState == HIGH && currentPlayState == LOW) {
+        // 👇 Button JUST pressed (edge detection)
 
-    showHeart = true;
-    heartTimer = millis();
-}
+        playMode = !playMode;   // TOGGLE
+
+        Serial.println(playMode ? "PLAY MODE ON" : "PLAY MODE OFF");
+
+        if (playMode) {
+            isWalking = true;
+            walkTimer = millis();
+        } else {
+            isWalking = false;
+        }
+
+        heartTimer = millis();
+    }
+
+    // update last state
+    lastPlayState = currentPlayState;
 
     // Feed Button -> Increase Hunger Bar
     if (digitalRead(BTN_FEED) == LOW) {
@@ -187,18 +194,22 @@ void display_Homepage() {
         u8g2.drawStr(4, 25, stepStr);
 
         // Happiness meter
-        u8g2.drawStr(4, 40, "Mood:");
+        u8g2.drawStr(4, 38, "Mood:");
 
-        for (int i = 0; i < happiness && i < 5; i++) {
-            u8g2.drawStr(50 + i*10, 40, "<3");
-        }
+        // draw bitmap hearts
+        for (int i = 0; i < 5; i++) {
+            if (i < happiness) {
+                u8g2.drawXBMP(4 + i * 12, 46, 8, 8, HEART_BITMAP);
+            }
+            else{
+                u8g2.drawFrame(4 + i * 12, 46, 8, 8); // empty heart slot
+            }
+}
     }
 
+    //pet walking to right
     updatePetAnimation(isWalking);
     int petX = playMode ? 80 : 48;
-    drawPetSprite(petX, 18 + petYOffset);
-
-    //pet walking to right
     int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
     drawPetSprite(petX + walkShift, 18 + petYOffset);
 
@@ -208,9 +219,8 @@ void display_Homepage() {
         u8g2.drawStr(95, 61, "Bed");
     }
 
-    if (showHeart) {
+    if (showHeart && !playMode) {
         u8g2.drawXBMP(82, 16, 8, 8, HEART_BITMAP);
-        if (millis() - heartTimer > 1000) showHeart = false; 
     }
 
     if (isSleeping) {
