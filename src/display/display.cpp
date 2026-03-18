@@ -5,9 +5,11 @@
 // pin definitions
 static const int PIN_SCK  = 11;  // OLED D0
 static const int PIN_MOSI = 10;  // OLED D1
-static const int PIN_CS   = 7;
-static const int PIN_DC   = 8;
 static const int PIN_RES  = 9;
+static const int PIN_DC   = 8;
+static const int PIN_CS   = 7;
+
+
 
 //button pins
 static const int BTN_FEED = 4;
