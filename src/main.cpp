@@ -3,6 +3,8 @@
 #include "sensors/imu.h"
 #include <WiFi.h>
 #include <time.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 #define WINDOW 10
 
@@ -29,6 +31,61 @@ static const unsigned long WIFI_CONNECT_TIMEOUT_MS = 10000;
 static const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 
 unsigned long lastWiFiRetry = 0;
+
+// ==== Weather ====
+const char* weatherApiKey = WEATHER_API_KEY;
+const char* city = "SanDiego";
+
+int currentTemp = 0;
+unsigned long lastWeatherFetch = 0;
+const unsigned long WEATHER_INTERVAL = 60000; // 1 min
+
+//date and time
+static unsigned long lastPrint = 0;
+
+void fetchTemperature() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected");
+        return;
+    }
+
+    Serial.println("Fetching weather...");
+
+    WiFiClientSecure client;
+    client.setInsecure();  // 👈 IMPORTANT
+
+    HTTPClient http;
+
+    String url = "https://api.openweathermap.org/data/2.5/weather?zip=92130,US&units=imperial&appid=" + String(weatherApiKey); //uses zip instead of city name (wont break)
+
+    http.begin(client, url);
+    int httpCode = http.GET();
+
+    Serial.print("HTTP Code: ");
+    Serial.println(httpCode);
+
+    String payload = http.getString();
+    Serial.println(payload);   // 👈 DEBUG
+
+    if (httpCode == 200) {
+        StaticJsonDocument<1024> doc;
+        DeserializationError error = deserializeJson(doc, payload);
+
+        if (!error && doc["main"]["temp"]) {
+            currentTemp = (int)doc["main"]["temp"];
+
+            Serial.print("Temp: ");
+            Serial.println(currentTemp);
+        } else {
+            Serial.println("JSON parse failed");
+        }
+    } else {
+        Serial.println("HTTP request failed");
+    }
+
+    http.end();
+}
+
 
 // ===== SETUP =====
 void setup() {
@@ -64,10 +121,23 @@ void setup() {
     } else {
         Serial.println("\nWiFi failed, continuing offline.");
     }
+
+    fetchTemperature();               // 👈 get temp immediately
+    display_setTemp(currentTemp);     // 👈 show it right away
 }
 
 // ===== LOOP =====
 void loop() {
+
+    // ==== Weather Update ====
+    if (millis() - lastWeatherFetch > WEATHER_INTERVAL) {
+        lastWeatherFetch = millis();
+        fetchTemperature();
+        if (currentTemp != 0) {
+            display_setTemp(currentTemp);
+        }
+    }
+    
 
     // ===== TIME UPDATE =====
     struct tm timeinfo;
@@ -88,9 +158,13 @@ void loop() {
 
         display_setDate(month, date);
 
-        // DEBUG (optional)
-        Serial.printf("Time: %02d:%02d | Date: %02d/%02d\n",
-                      hours24, minutes, month, date);
+        // debug time and date
+        if (millis() - lastPrint > 1000) {
+            lastPrint = millis();
+
+            Serial.printf("Time: %02d:%02d | Date: %02d/%02d\n",
+                        hours24, minutes, month, date);
+        }
     }
     else if (millis() - lastWiFiRetry >= WIFI_RETRY_INTERVAL_MS) {
         lastWiFiRetry = millis();

@@ -41,6 +41,9 @@ bool displayPM = false;
 int displayMonth = 0;
 int displayDay = 0;
 
+//weather variables
+int displayTemp =0;
+
 
 
 
@@ -92,6 +95,10 @@ static const uint8_t HEART_BITMAP[] = {
 
 //functions
 
+void display_setTemp(int t) {
+    displayTemp = t;
+}
+
 void display_setDate(int m, int d) {
     displayMonth = m;
     displayDay = d;
@@ -102,7 +109,6 @@ void display_setTime(int h, int m, bool isPM) {
     displayMinutes = m;
     displayPM = isPM;
 }
-
 
 static void drawPetSprite(int x, int y)
 {
@@ -218,6 +224,12 @@ void display_Homepage() {
     char dateStr[20];
     sprintf(dateStr, "%02d/%02d", displayMonth, displayDay);
     u8g2.drawStr(4, 26, dateStr);
+
+    char tempStr[10];
+    sprintf(tempStr, "%d%cF", displayTemp, 176);
+    
+    // right corner (adjust if needed)
+    u8g2.drawStr(90, 12, tempStr);
 
     if (playMode) {
         // Steps taken by user
