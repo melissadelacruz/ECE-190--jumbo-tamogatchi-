@@ -3,7 +3,7 @@
 Adafruit_MPU6050 mpu;
 
 void imuSetup() {
-    Wire.begin(15, 16); // SDA, SCL
+    Wire.begin(16, 15); // SDA, SCL
     
     if (!mpu.begin()) {
         Serial.println("MPU6050 not found");
