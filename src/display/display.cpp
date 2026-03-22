@@ -11,8 +11,8 @@ static const int PIN_CS   = 7;
 
 //button pins
 static const int BTN_FEED = 4;
-static const int BTN_PLAY = 5;
-static const int BTN_BED  = 6;
+static const int BTN_BED  = 5;
+static const int BTN_PLAY = 6;
 
 // animation variables
 int petYOffset = 0;
@@ -20,14 +20,10 @@ bool goingUp = true;
 unsigned long lastAnim = 0;
 
 // global variables
-bool showHeart = false;
-bool isSleeping = false;
-bool isWalking = false;
-bool playMode = false;
+// Button edge state is local to the display/button module.
 bool lastPlayState = HIGH;
-unsigned long heartTimer = 0;
-int hungerLevel = 4; // Start with some hunger
-unsigned long walkTimer = 0;
+bool lastFeedState = HIGH;
+bool lastBedState = HIGH;
 
 extern int stepCount;
 extern int happiness;
@@ -41,16 +37,17 @@ bool displayPM = false;
 int displayMonth = 0;
 int displayDay = 0;
 
-//weather variables
+// weather variables
 int displayTemp =0;
 
 
-
-
+// display screen
 U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI
 u8g2(U8G2_R0, PIN_CS, PIN_DC, PIN_RES);
 
 // bitmaps
+
+//pet
 static const uint32_t ORANGE_SHAPE[] = {
     0b00000000000000000000000000000000, 
     0b00000000000000000000111000000000, // Leaf top
@@ -81,7 +78,7 @@ static const uint32_t ORANGE_SHAPE[] = {
 };
 
 
-//heart display
+// heart
 static const uint8_t HEART_BITMAP[] = {
     0b01100110,
     0b11111111,
@@ -93,8 +90,31 @@ static const uint8_t HEART_BITMAP[] = {
     0b00000000
 };
 
-//functions
+// Thunder bolt
+static const uint8_t THUNDER_BITMAP[] = {
+    0b00010000,
+    0b00011000,
+    0b00011100,
+    0b11111110,
+    0b01111111,
+    0b00111000,
+    0b00011000,
+    0b00001000
+};
 
+// Banana bitmap for fullness
+static const uint8_t BANANA_BITMAP[] = {
+    0b00011100,
+    0b00111110,
+    0b01111111,
+    0b11111111,
+    0b11111110,
+    0b01111100,
+    0b00111000,
+    0b00010000
+};
+
+// functions
 void display_setTemp(int t) {
     displayTemp = t;
 }
@@ -110,30 +130,58 @@ void display_setTime(int h, int m, bool isPM) {
     displayPM = isPM;
 }
 
-static void drawPetSprite(int x, int y)
-{
-    // 1. Draw the white body silhouette
+// Modified drawPetSprite with size parameter (scale factor)
+static void drawPetSprite(int x, int y, bool isSleeping = false, float scale = 1.0) {
+    // Calculate scaled dimensions
+    int width = 32;
+    int height = 26;
+    int scaledWidth = width * scale;
+    int scaledHeight = height * scale;
+    
+    // Center the sprite when scaled
+    int offsetX = (scaledWidth - width) / 2;
+    int offsetY = (scaledHeight - height) / 2;
+    
     u8g2.setDrawColor(1);
-    for (int row = 0; row < 26; ++row) // Adjusted for actual sprite height
-    {
-        for (int col = 0; col < 32; ++col)
-        {
-            if ((ORANGE_SHAPE[row] >> (31 - col)) & 1)
-            {
-                u8g2.drawPixel(x + col, y + row);
+    
+    // Draw scaled sprite
+    for (int row = 0; row < height; ++row) {
+        for (int col = 0; col < width; ++col) {
+            if ((ORANGE_SHAPE[row] >> (31 - col)) & 1) {
+                // Draw scaled pixel (simple scaling)
+                for (int sy = 0; sy < scale; sy++) {
+                    for (int sx = 0; sx < scale; sx++) {
+                        u8g2.drawPixel(x + (col * scale) + sx - offsetX, 
+                                      y + (row * scale) + sy - offsetY);
+                    }
+                }
             }
         }
     }
 
-    u8g2.setDrawColor(0); //black holes for face
-    u8g2.drawBox(x + 9, y + 14, 2, 3);  // Left Eye
-    u8g2.drawBox(x + 17, y + 14, 2, 3); // Right Eye
-    u8g2.drawPixel(x + 12, y + 18);     // Smile Left
-    u8g2.drawPixel(x + 13, y + 19);     // Smile Bottom
-    u8g2.drawPixel(x + 14, y + 18);     // Smile Right
-    u8g2.setDrawColor(1); // Reset back to white
+    u8g2.setDrawColor(0); // black holes for face
+    
+    // Adjust face positions based on scale
+    int eyeOffset = scale * 9;
+    int eyeYOffset = y + (scale * 14);
+    
+    if (isSleeping) {
+        // Closed eyes
+        u8g2.drawBox(x + (scale * 9), eyeYOffset, scale * 4, scale * 2);
+        u8g2.drawBox(x + (scale * 17), eyeYOffset, scale * 4, scale * 2);
+        u8g2.drawHLine(x + (scale * 12), y + (scale * 19), scale * 4);
+    } else {
+        // Normal open eyes
+        u8g2.drawBox(x + (scale * 9), eyeYOffset, scale * 2, scale * 3);
+        u8g2.drawBox(x + (scale * 17), eyeYOffset, scale * 2, scale * 3);
+        // Smile gets bigger with scale
+        u8g2.drawPixel(x + (scale * 12), y + (scale * 18));
+        u8g2.drawPixel(x + (scale * 13), y + (scale * 19));
+        u8g2.drawPixel(x + (scale * 14), y + (scale * 18));
+    }
+    
+    u8g2.setDrawColor(1);
 }
-
 
 void display_init()
 {
@@ -151,38 +199,44 @@ void setup_buttons() {
 
 
 void check_buttons() {
-    // Play Button -> Increase Heart Meter through Pedometer
+    // Play Button
     bool currentPlayState = digitalRead(BTN_PLAY);
-
     if (lastPlayState == HIGH && currentPlayState == LOW) {
-        // 👇 Button JUST pressed (edge detection)
-
-        playMode = !playMode;   // TOGGLE
-
-        Serial.println(playMode ? "PLAY MODE ON" : "PLAY MODE OFF");
-
-        if (playMode) {
-            isWalking = true;
-            walkTimer = millis();
-        } else {
-            isWalking = false;
+        // Enter/exit play mode and leave the other modes cleanly.
+        if (!playMode) {
+            feedMode = false;
+            isSleeping = false;
         }
 
+        playMode = !playMode;
+        isWalking = playMode;
         heartTimer = millis();
     }
-
-    // update last state
     lastPlayState = currentPlayState;
 
-    // Feed Button -> Increase Hunger Bar
-    if (digitalRead(BTN_FEED) == LOW) {
-        if (hungerLevel < 6) hungerLevel++;
-    }
+    // Feed Button
+    bool currentFeedState = digitalRead(BTN_FEED);
+    if (lastFeedState == HIGH && currentFeedState == LOW) {
+        if (!feedMode) {
+            playMode = false;
+            isSleeping = false;
+            isWalking = false;
+        } 
 
-    // Sleep Button -> Turn off screen for a couple of seconds and display "zzz"
-    if (digitalRead(BTN_BED) == LOW) {
-        isSleeping = !isSleeping; // Toggle sleep on/off
+        // Feed button acts as an enter/exit toggle for feed mode.
+        feedMode = !feedMode;
     }
+    lastFeedState = currentFeedState;
+
+    // Sleep Button
+    bool currentBedState = digitalRead(BTN_BED);
+    if (lastBedState == HIGH && currentBedState == LOW) {
+        playMode = false;
+        feedMode = false;
+        isSleeping = !isSleeping;
+        isWalking = false;
+    }
+    lastBedState = currentBedState;
 }
 
 void updatePetAnimation(bool isWalking) {
@@ -204,15 +258,168 @@ void updatePetAnimation(bool isWalking) {
     }
 }
 
-
-void display_Homepage() {
+// Update display_Play() to show full play mode screen
+void display_Play() {
+    u8g2.clearBuffer();
+    u8g2.drawFrame(0, 0, 128, 64);
+    u8g2.setFont(u8g2_font_6x10_tr);
     
+    // Title
+    u8g2.drawStr(4, 12, "PLAYING");
+    
+    // Steps taken by user
+    char stepStr[20];
+    sprintf(stepStr, "Steps: %d", stepCount);
+    u8g2.drawStr(4, 28, stepStr);
+    
+    
+    // Happiness meter
+    u8g2.drawStr(4, 38, "Mood:");
+
+    // draw bitmap hearts
+    for (int i = 0; i < 5; i++) {
+        if (i < happiness) {
+            u8g2.drawXBMP(4 + i * 12, 46, 8, 8, HEART_BITMAP);
+        }
+    }
+    
+    // Show pet in play mode
+    updatePetAnimation(isWalking);
+    int petX = 80;
+    int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
+    drawPetSprite(petX + walkShift, 32 + petYOffset);
+    
+    u8g2.sendBuffer();
+}
+
+// Updated display_Feed function
+void display_Feed() {
+    u8g2.clearBuffer();
+    u8g2.drawFrame(0, 0, 128, 64);
+    u8g2.setFont(u8g2_font_6x10_tr);
+    
+    // Title
+    u8g2.drawStr(4, 12, "FEED MODE");
+    
+    // Instructions
+    u8g2.drawStr(4, 24, "Shake to feed!");
+    
+    // Fullness bar
+    u8g2.drawStr(4, 38, "Fullness:");
+    
+    // Draw bananas for fullness level (0-6)
+    for (int i = 0; i < 6; i++) {
+        int x = 4 + i * 12;
+        int y = 42;
+        
+        if (i < fullnessLevel) {
+            // Filled banana
+            u8g2.drawXBMP(x, y, 8, 8, BANANA_BITMAP);
+        } else {
+            // Empty banana (outline)
+            u8g2.drawFrame(x, y, 8, 8);
+        }
+    }
+    
+    // Show fullness as text
+    char fullnessStr[20];
+    sprintf(fullnessStr, "%d/6", fullnessLevel);
+    u8g2.drawStr(95, 42, fullnessStr);
+    
+    // Draw pet with size based on fullness level
+    // Scale from 0.8 (skinny) to 1.5 (fat)
+    float petScale = 0.8 + (fullnessLevel / 15.0);  // Min 0.8, Max 1.4
+    if (petScale > 1.5) petScale = 1.5;
+    if (petScale < 0.8) petScale = 0.8;
+    
+    // Position pet based on scale
+    int petX = 80;
+    int petY = 20;
+    
+    // Show walking animation in feed mode
+    updatePetAnimation(isWalking);
+    int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
+    drawPetSprite(petX + walkShift, petY + petYOffset, false, petScale);
+    
+    // Show "Yum!" text when shaking
+    if (millis() - lastShakeTime < 300) {
+        u8g2.drawStr(4, 56, "YUM! +1");
+    }
+    
+    // Instructions to exit
+    u8g2.drawStr(4, 62, "Press FEED to exit");
+    
+    u8g2.sendBuffer();
+}
+
+
+// Update display_Bed() function with walking pet and energy bar
+void display_Bed() {
+    u8g2.clearBuffer();
+    u8g2.drawFrame(0, 0, 128, 64);
+    
+    // Draw walking pet on the right with closed eyes (sleeping)
+    updatePetAnimation(isWalking);
+    int petX = 80;  // Position on the right
+    int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
+    drawPetSprite(petX + walkShift, 18 + petYOffset, true);  // true = sleeping (closed eyes)
+    
+    // Add sleeping Z's above pet
+    u8g2.setFont(u8g2_font_6x10_tr);
+
+    u8g2.drawStr(102, 10, "z");
+    u8g2.drawStr(109, 15, "z");
+    
+    // Draw "Sleeping" text
+    u8g2.drawStr(4, 12, "SLEEPING");
+    
+    // Draw energy bar - moved higher to better show thunder bolts
+    u8g2.drawStr(4, 28, "Energy:");
+    
+    // Draw thunder bolts for energy level
+    for (int i = 0; i < 5; i++) {
+        int x = 4 + i * 12;
+        int y = 32;  // Moved higher so bolts are clearly visible
+        
+        if (i < energyLevel) {
+            // Filled thunder bolt
+            u8g2.drawXBMP(x, y, 8, 8, THUNDER_BITMAP);
+        } 
+    }
+    
+    // Show energy level as text
+    char energyStr[20];
+    sprintf(energyStr, "%d/5", energyLevel);
+    u8g2.drawStr(4, 50, energyStr);
+    
+    u8g2.sendBuffer();
+}
+
+// Update display_Home() to be the main dispatcher
+void display_Home() {
+    // Check states in priority order
+    if (isSleeping) {
+        display_Bed();
+        return;
+    }
+    
+    if (playMode) {
+        display_Play();
+        return;
+    }
+
+    if(feedMode) {
+        display_Feed();
+        return;
+    }
+    
+    // Normal home screen (no special modes)
     u8g2.clearBuffer();
     u8g2.drawFrame(0, 0, 128, 64);
     
     u8g2.setFont(u8g2_font_6x10_tr);
 
-    //time UI
+    // Time UI
     char timeStr[20];
     sprintf(timeStr, "%d:%02d %s",
             displayHours,
@@ -220,60 +427,27 @@ void display_Homepage() {
             displayPM ? "PM" : "AM");
     u8g2.drawStr(4, 12, timeStr);
 
-    //date UI
+    // Date UI
     char dateStr[20];
     sprintf(dateStr, "%02d/%02d", displayMonth, displayDay);
     u8g2.drawStr(4, 26, dateStr);
 
+    // Temperature UI
     char tempStr[10];
     sprintf(tempStr, "%d%cF", displayTemp, 176);
-    
-    // right corner (adjust if needed)
-    u8g2.drawStr(90, 12, tempStr);
+    u8g2.drawStr(100, 12, tempStr);
 
-    if (playMode) {
-        // Steps taken by user
-        char stepStr[20];
-        sprintf(stepStr, "Steps: %d", stepCount);
-        u8g2.drawStr(4, 25, stepStr);
-
-        // Happiness meter
-        u8g2.drawStr(4, 38, "Mood:");
-
-        // draw bitmap hearts
-        for (int i = 0; i < 5; i++) {
-            if (i < happiness) {
-                u8g2.drawXBMP(4 + i * 12, 46, 8, 8, HEART_BITMAP);
-            }
-            else{
-                u8g2.drawFrame(4 + i * 12, 46, 8, 8); // empty heart slot
-            }
-}
-    }
-
-    //pet walking to right
+    // Pet animation
     updatePetAnimation(isWalking);
-    int petX = playMode ? 80 : 48;
+    int petX = 48;
     int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
     drawPetSprite(petX + walkShift, 18 + petYOffset);
 
-    if (!playMode) {
-        u8g2.drawStr(7, 61, "Feed");
-        u8g2.drawStr(50, 61, "Play");
-        u8g2.drawStr(95, 61, "Bed");
-    }
-
-    if (showHeart && !playMode) {
-        u8g2.drawXBMP(82, 16, 8, 8, HEART_BITMAP);
-    }
-
-    if (isSleeping) {
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tr);
-    u8g2.drawStr(50, 32, "Zzz..."); 
-    u8g2.sendBuffer();
-    return; // Skip drawing the rest of the UI
-}
-
+    // Button labels
+    u8g2.drawStr(7, 61, "Feed");
+    u8g2.drawStr(50, 61, "Play");
+    u8g2.drawStr(100, 61, "Bed");
+    
+    
     u8g2.sendBuffer();
 }

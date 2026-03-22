@@ -9,6 +9,13 @@ void imuSetup() {
         Serial.println("MPU6050 not found");
         while (1) delay(10);
     }
+    
+    // Configure for better step detection
+    mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+    mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+    mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+    
+    Serial.println("MPU6050 initialized");
 }
 
 void imuRead(float &ax, float &ay, float &az,

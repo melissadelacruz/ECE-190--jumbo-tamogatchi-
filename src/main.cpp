@@ -1,47 +1,44 @@
 #include <Arduino.h>
 #include "display/display.h"
 #include "sensors/imu.h"
+#include "sensors/pedometer.h"
+#include "sensors/shake.h"
 #include <WiFi.h>
 #include <time.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-#define WINDOW 10
+// Create sensor objects
+Pedometer pedometer;
+ShakeDetector shakeDetector;
 
-// ===== PEDOMETER =====
-float buffer[WINDOW];
-int bufIndex = 0;
-
+// Global variables for display (defined here)
 int stepCount = 0;
-bool stepDetected = false;
-
-float baseline = 29.0;
-float ax, ay, az;
-float gx, gy, gz;
-
-// ===== CHARACTER =====
 int happiness = 0;
-unsigned long lastStepTime = 0;
+int fullnessLevel = 4;
+int energyLevel = 0;
+int hungerLevel = 4;
 
-// ===== WIFI =====
+// Mode flags
+bool playMode = false;
+bool feedMode = false;
+bool isSleeping = false;
+bool isWalking = false;
+
+unsigned long heartTimer = 0;
+unsigned long lastShakeTime = 0;
+unsigned long lastEnergyUpdate = 0;
+
+// WiFi credentials
 const char* ssid = "SpectrumSetup-3022";
 const char* password = "nationalregister925";
+const char* weatherApiKey = WEATHER_API_KEY;
 
 static const unsigned long WIFI_CONNECT_TIMEOUT_MS = 10000;
 static const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
-
 unsigned long lastWiFiRetry = 0;
-
-// ==== Weather ====
-const char* weatherApiKey = WEATHER_API_KEY;
-const char* city = "SanDiego";
-
-int currentTemp = 0;
 unsigned long lastWeatherFetch = 0;
-const unsigned long WEATHER_INTERVAL = 60000; // 1 min
-
-//date and time
-static unsigned long lastPrint = 0;
+const unsigned long WEATHER_INTERVAL = 60000;
 
 void fetchTemperature() {
     if (WiFi.status() != WL_CONNECTED) {
@@ -50,168 +47,130 @@ void fetchTemperature() {
     }
 
     Serial.println("Fetching weather...");
-
     WiFiClientSecure client;
-    client.setInsecure();  // 👈 IMPORTANT
+    client.setInsecure();
 
     HTTPClient http;
-
-    String url = "https://api.openweathermap.org/data/2.5/weather?zip=92130,US&units=imperial&appid=" + String(weatherApiKey); //uses zip instead of city name (wont break)
-
+    String url = "https://api.openweathermap.org/data/2.5/weather?zip=92130,US&units=imperial&appid=" + String(weatherApiKey);
+    
     http.begin(client, url);
     int httpCode = http.GET();
 
-    Serial.print("HTTP Code: ");
-    Serial.println(httpCode);
-
-    String payload = http.getString();
-    Serial.println(payload);   // 👈 DEBUG
-
     if (httpCode == 200) {
+        String payload = http.getString();
         StaticJsonDocument<1024> doc;
         DeserializationError error = deserializeJson(doc, payload);
 
         if (!error && doc["main"]["temp"]) {
-            currentTemp = (int)doc["main"]["temp"];
-
+            int displayTemp = (int)doc["main"]["temp"];
+            display_setTemp(displayTemp);
             Serial.print("Temp: ");
-            Serial.println(currentTemp);
-        } else {
-            Serial.println("JSON parse failed");
+            Serial.println(displayTemp);
         }
-    } else {
-        Serial.println("HTTP request failed");
     }
-
     http.end();
 }
 
-
-// ===== SETUP =====
 void setup() {
     Serial.begin(115200);
     delay(1500);
 
-    Serial.println("Booting IMU...");
+    Serial.println("Initializing IMU...");
     imuSetup();
+    
+    // Initialize sensors
+    pedometer.begin();
+    shakeDetector.setThreshold(2.5);
+    shakeDetector.setCooldown(500);
+    shakeDetector.setSamplesRequired(3);
 
     display_init();
     setup_buttons();
-
-    // ---- WiFi Connect ----
+    
+    // WiFi Connect
     Serial.print("Connecting to WiFi...");
     WiFi.begin(ssid, password);
-
     unsigned long wifiStart = millis();
 
-    while (WiFi.status() != WL_CONNECTED &&
-           millis() - wifiStart < WIFI_CONNECT_TIMEOUT_MS) {
+    while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < WIFI_CONNECT_TIMEOUT_MS) {
         delay(500);
         Serial.print(".");
     }
 
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println("\nConnected!");
-        Serial.print("IP: ");
-        Serial.println(WiFi.localIP());
-
-        // ---- TIME SETUP ----
-        configTime(-8 * 3600, 3600, "pool.ntp.org"); // PST + DST auto
-
+        configTime(-8 * 3600, 3600, "pool.ntp.org");
+        fetchTemperature();
     } else {
         Serial.println("\nWiFi failed, continuing offline.");
     }
-
-    fetchTemperature();               // 👈 get temp immediately
-    display_setTemp(currentTemp);     // 👈 show it right away
 }
 
-// ===== LOOP =====
 void loop() {
-
-    // ==== Weather Update ====
-    if (millis() - lastWeatherFetch > WEATHER_INTERVAL) {
-        lastWeatherFetch = millis();
-        fetchTemperature();
-        if (currentTemp != 0) {
-            display_setTemp(currentTemp);
-        }
-    }
-    
-
-    // ===== TIME UPDATE =====
+    // Time Update
     struct tm timeinfo;
-
     if (WiFi.status() == WL_CONNECTED && getLocalTime(&timeinfo)) {
-
         int hours24 = timeinfo.tm_hour;
         int minutes = timeinfo.tm_min;
-
         bool isPM = hours24 >= 12;
         int hours12 = hours24 % 12;
         if (hours12 == 0) hours12 = 12;
-
+        
         display_setTime(hours12, minutes, isPM);
-
-        int month = timeinfo.tm_mon + 1;
-        int date  = timeinfo.tm_mday;
-
-        display_setDate(month, date);
-
-        // debug time and date
-        if (millis() - lastPrint > 1000) {
-            lastPrint = millis();
-
-            Serial.printf("Time: %02d:%02d | Date: %02d/%02d\n",
-                        hours24, minutes, month, date);
-        }
-    }
-    else if (millis() - lastWiFiRetry >= WIFI_RETRY_INTERVAL_MS) {
+        display_setDate(timeinfo.tm_mon + 1, timeinfo.tm_mday);
+    } else if (millis() - lastWiFiRetry >= WIFI_RETRY_INTERVAL_MS) {
         lastWiFiRetry = millis();
-        Serial.println("Retrying WiFi...");
         WiFi.disconnect();
         WiFi.begin(ssid, password);
     }
-
-    // ===== IMU READ =====
-    imuRead(ax, ay, az, gx, gy, gz);
-
-    // 1. L1 norm
-    float l1 = abs(ax) + abs(ay) + abs(az);
-
-    // 2. Moving average
-    buffer[bufIndex] = l1;
-    bufIndex = (bufIndex + 1) % WINDOW;
-
-    float avg = 0;
-    for (int i = 0; i < WINDOW; i++) {
-        avg += buffer[i];
+    
+    // Weather Update
+    if (millis() - lastWeatherFetch > WEATHER_INTERVAL) {
+        lastWeatherFetch = millis();
+        fetchTemperature();
     }
-    avg /= WINDOW;
-
-    // 3. Detrend
-    float dt = avg - baseline;
-
-    // 4. Step detection
-    if (dt > 2.0 && !stepDetected) {
-        stepCount++;
-        stepDetected = true;
-        lastStepTime = millis();
-
-        Serial.print("Steps: ");
-        Serial.println(stepCount);
-
-        if (stepCount % 15 == 0 && stepCount != 0) {
-            happiness++;
-            Serial.println("💖 Pet is happier!");
+    
+    // IMU Read
+    float ax, ay, az, gx, gy, gz;
+    imuRead(ax, ay, az, gx, gy, gz);
+    
+    // PEDOMETER - Only in PLAY mode
+    if (playMode) {
+        if (pedometer.update(ax, ay, az)) {
+            stepCount = pedometer.getStepCount();
+            happiness = pedometer.getHappiness();
+            isWalking = true;
+        }
+    } else {
+        isWalking = false;
+    }
+    
+    // SHAKE DETECTOR - Only in FEED mode
+    if (feedMode) {
+        if (shakeDetector.update(ax, ay, az)) {
+            if (fullnessLevel < 6) {
+                fullnessLevel++;
+                if (happiness < 5) {
+                    happiness++;
+                    pedometer.setHappiness(happiness);
+                }
+            }
+            lastShakeTime = millis();
         }
     }
-
-    if (dt < 1.0) {
-        stepDetected = false;
+    
+    // ENERGY UPDATE - Only in BED mode
+    if (isSleeping) {
+        if (millis() - lastEnergyUpdate > 30000) {
+            lastEnergyUpdate = millis();
+            if (energyLevel < 5) {
+                energyLevel++;
+            }
+        }
     }
-
-    // ===== UI =====
+    
+    // UI
     check_buttons();
-    display_Homepage();
+    display_Home();
+    delay(50);
 }
