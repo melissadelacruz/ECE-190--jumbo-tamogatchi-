@@ -24,7 +24,6 @@ unsigned long lastAnim = 0;
 bool lastPlayState = HIGH;
 bool lastFeedState = HIGH;
 bool lastBedState = HIGH;
-// With your other globals
 unsigned long lastShakeTime = 0;
 
 extern int stepCount;

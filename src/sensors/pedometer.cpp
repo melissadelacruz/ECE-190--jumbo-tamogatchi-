@@ -17,7 +17,6 @@ Pedometer::Pedometer() {
 }
 
 void Pedometer::begin() {
-    // Reset all values
     bufIndex = 0;
     stepCount = 0;
     happiness = 0;
@@ -29,6 +28,9 @@ void Pedometer::begin() {
     }
 }
 
+
+// ---- needs to be more accurate (improved on accuracy) -----
+
 bool Pedometer::update(float ax, float ay, float az) {
     float l1 = calculateL1Norm(ax, ay, az);
     
@@ -39,6 +41,24 @@ bool Pedometer::update(float ax, float ay, float az) {
     float avg = calculateMovingAverage();
     float dt = avg - baseline;
     
+    // DEBUG: Print values every 1 second
+    static unsigned long lastDebugPrint = 0;
+    if (millis() - lastDebugPrint > 1000) {
+        lastDebugPrint = millis();
+        Serial.print("L1: ");
+        Serial.print(l1);
+        Serial.print(" | Avg: ");
+        Serial.print(avg);
+        Serial.print(" | Baseline: ");
+        Serial.print(baseline);
+        Serial.print(" | dt: ");
+        Serial.print(dt);
+        Serial.print(" | StepDetected: ");
+        Serial.print(stepDetected ? "true" : "false");
+        Serial.print(" | Steps: ");
+        Serial.println(stepCount);
+    }
+    
     bool stepOccurred = false;
     
     if (detectStep(dt) && !stepDetected) {
@@ -47,10 +67,14 @@ bool Pedometer::update(float ax, float ay, float az) {
         lastStepTime = millis();
         stepOccurred = true;
         
-        // Increase happiness every 15 steps
+        Serial.print("*** STEP DETECTED! *** Total: ");
+        Serial.println(stepCount);
+        
         if (stepCount % 15 == 0 && stepCount != 0) {
             if (happiness < 5) {
                 happiness++;
+                Serial.print("Happiness increased to: ");
+                Serial.println(happiness);
             }
         }
     }
@@ -67,7 +91,6 @@ void Pedometer::resetSteps() {
 }
 
 void Pedometer::setWindowSize(int size) {
-    // Reallocate buffer with new size
     delete[] buffer;
     windowSize = size;
     buffer = new float[windowSize];
@@ -91,7 +114,7 @@ float Pedometer::calculateMovingAverage() {
 }
 
 bool Pedometer::detectStep(float dt) {
-    return dt > 2.0;
+    return dt > 2.0;  // Try changing this to 1.0 or 1.5 if needed
 }
 
 void Pedometer::setHappiness(int value) {
@@ -99,3 +122,4 @@ void Pedometer::setHappiness(int value) {
         happiness = value;
     }
 }
+

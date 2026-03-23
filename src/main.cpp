@@ -77,7 +77,26 @@ void setup() {
     imuSetup();
     
     // Initialize sensors
-    pedometer.begin();
+
+    // Calibrate pedometer baseline
+    Serial.println("Calibrating pedometer - stand still for 3 seconds...");
+    delay(3000);
+    
+    float sum = 0;
+    for (int i = 0; i < 100; i++) {
+        float ax, ay, az, gx, gy, gz;
+        imuRead(ax, ay, az, gx, gy, gz);
+        float l1 = abs(ax) + abs(ay) + abs(az);
+        sum += l1;
+        delay(10);
+    }
+    float calibratedBaseline = sum / 100;
+    Serial.print("Calibrated baseline: ");
+    Serial.println(calibratedBaseline);
+    
+    pedometer.setBaseline(calibratedBaseline);
+
+    // shake detector
     shakeDetector.setThreshold(25.0); //delta value set from data recorded based on hand shake
     shakeDetector.setCooldown(2000);
     shakeDetector.setSamplesRequired(3);
@@ -133,7 +152,7 @@ void loop() {
     imuRead(ax, ay, az, gx, gy, gz);
 
 
-    // shake feature for FEED MODE
+    // shake feature for FEED MODE (printing delta for debugging)
     if (feedMode) {
     // Calculate delta for debugging
     static float prevAx, prevAy, prevAz;
@@ -148,6 +167,15 @@ void loop() {
     prevAx = ax; prevAy = ay; prevAz = az;
     first = false;
 }
+
+    // Add this to see raw acceleration when in play mode (for debugging pedometer)
+    if (playMode) {
+        static unsigned long lastPrint = 0;
+        if (millis() - lastPrint > 2000) {
+            lastPrint = millis();
+            Serial.printf("Raw - ax: %.2f, ay: %.2f, az: %.2f\n", ax, ay, az);
+        }
+    }
     
     // PEDOMETER - Only in PLAY mode
     if (playMode) {
