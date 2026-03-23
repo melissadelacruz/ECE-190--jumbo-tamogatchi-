@@ -23,6 +23,10 @@ private:
     unsigned long lastShakeTime;
     int shakeSampleCount;
     
+    // For change detection
+    float prevAx, prevAy, prevAz;
+    bool hasPrevValues;
+    
     float calculateMagnitude(float ax, float ay, float az) const;
 };
 

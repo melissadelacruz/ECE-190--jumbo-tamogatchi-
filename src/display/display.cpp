@@ -24,6 +24,8 @@ unsigned long lastAnim = 0;
 bool lastPlayState = HIGH;
 bool lastFeedState = HIGH;
 bool lastBedState = HIGH;
+// With your other globals
+unsigned long lastShakeTime = 0;
 
 extern int stepCount;
 extern int happiness;
@@ -32,8 +34,6 @@ extern int happiness;
 int displayHours = 0;
 int displayMinutes = 0;
 bool displayPM = false;
-
-
 int displayMonth = 0;
 int displayDay = 0;
 
@@ -102,15 +102,15 @@ static const uint8_t THUNDER_BITMAP[] = {
     0b00001000
 };
 
-// Banana bitmap for fullness
-static const uint8_t BANANA_BITMAP[] = {
-    0b00011100,
-    0b00111110,
-    0b01111111,
-    0b11111111,
-    0b11111110,
+//for fullness
+static const uint8_t ICECREAM_BITMAP[] = {
+    0b00111000,
+    0b01111100,
+    0b01111100,
+    0b01111100,
     0b01111100,
     0b00111000,
+    0b00010000,
     0b00010000
 };
 
@@ -169,7 +169,6 @@ static void drawPetSprite(int x, int y, bool isSleeping = false, float scale = 1
         // Closed eyes
         u8g2.drawBox(x + (scale * 9), eyeYOffset, scale * 4, scale * 2);
         u8g2.drawBox(x + (scale * 17), eyeYOffset, scale * 4, scale * 2);
-        u8g2.drawHLine(x + (scale * 12), y + (scale * 19), scale * 4);
     } else {
         // Normal open eyes
         u8g2.drawBox(x + (scale * 9), eyeYOffset, scale * 2, scale * 3);
@@ -249,7 +248,7 @@ void updatePetAnimation(bool isWalking) {
         lastAnim = millis();
 
         if (goingUp) {
-            petYOffset = -2;
+            petYOffset = -16;
             goingUp = false;
         } else {
             petYOffset = 0;
@@ -271,7 +270,6 @@ void display_Play() {
     char stepStr[20];
     sprintf(stepStr, "Steps: %d", stepCount);
     u8g2.drawStr(4, 28, stepStr);
-    
     
     // Happiness meter
     u8g2.drawStr(4, 38, "Mood:");
@@ -314,22 +312,19 @@ void display_Feed() {
         
         if (i < fullnessLevel) {
             // Filled banana
-            u8g2.drawXBMP(x, y, 8, 8, BANANA_BITMAP);
-        } else {
-            // Empty banana (outline)
-            u8g2.drawFrame(x, y, 8, 8);
-        }
+            u8g2.drawXBMP(x, y, 8, 8, ICECREAM_BITMAP);
+        } 
     }
     
     // Show fullness as text
     char fullnessStr[20];
     sprintf(fullnessStr, "%d/6", fullnessLevel);
-    u8g2.drawStr(95, 42, fullnessStr);
+    u8g2.drawStr(4, 60, fullnessStr);
     
     // Draw pet with size based on fullness level
     // Scale from 0.8 (skinny) to 1.5 (fat)
-    float petScale = 0.8 + (fullnessLevel / 15.0);  // Min 0.8, Max 1.4
-    if (petScale > 1.5) petScale = 1.5;
+    float petScale = 0.7 + (fullnessLevel * 0.12);  // Min 0.7, Max 1.42
+    if (petScale > 1.4) petScale = 1.4;
     if (petScale < 0.8) petScale = 0.8;
     
     // Position pet based on scale
@@ -339,15 +334,7 @@ void display_Feed() {
     // Show walking animation in feed mode
     updatePetAnimation(isWalking);
     int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
-    drawPetSprite(petX + walkShift, petY + petYOffset, false, petScale);
-    
-    // Show "Yum!" text when shaking
-    if (millis() - lastShakeTime < 300) {
-        u8g2.drawStr(4, 56, "YUM! +1");
-    }
-    
-    // Instructions to exit
-    u8g2.drawStr(4, 62, "Press FEED to exit");
+    drawPetSprite(petX + walkShift, petY + petYOffset, false, petScale);    
     
     u8g2.sendBuffer();
 }

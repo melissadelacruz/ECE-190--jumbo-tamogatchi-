@@ -15,9 +15,8 @@ ShakeDetector shakeDetector;
 // Global variables for display (defined here)
 int stepCount = 0;
 int happiness = 0;
-int fullnessLevel = 4;
+int fullnessLevel = 0;
 int energyLevel = 0;
-int hungerLevel = 4;
 
 // Mode flags
 bool playMode = false;
@@ -26,7 +25,6 @@ bool isSleeping = false;
 bool isWalking = false;
 
 unsigned long heartTimer = 0;
-unsigned long lastShakeTime = 0;
 unsigned long lastEnergyUpdate = 0;
 
 // WiFi credentials
@@ -80,8 +78,8 @@ void setup() {
     
     // Initialize sensors
     pedometer.begin();
-    shakeDetector.setThreshold(2.5);
-    shakeDetector.setCooldown(500);
+    shakeDetector.setThreshold(25.0); //delta value set from data recorded based on hand shake
+    shakeDetector.setCooldown(2000);
     shakeDetector.setSamplesRequired(3);
 
     display_init();
@@ -133,6 +131,23 @@ void loop() {
     // IMU Read
     float ax, ay, az, gx, gy, gz;
     imuRead(ax, ay, az, gx, gy, gz);
+
+
+    // shake feature for FEED MODE
+    if (feedMode) {
+    // Calculate delta for debugging
+    static float prevAx, prevAy, prevAz;
+    static bool first = true;
+    if (!first) {
+        float delta = sqrt(pow(ax - prevAx, 2) + pow(ay - prevAy, 2) + pow(az - prevAz, 2));
+        if (delta > 2.0) {  // Only print when something happens
+            Serial.print("Delta: ");
+            Serial.println(delta);
+        }
+    }
+    prevAx = ax; prevAy = ay; prevAz = az;
+    first = false;
+}
     
     // PEDOMETER - Only in PLAY mode
     if (playMode) {
@@ -156,6 +171,7 @@ void loop() {
                 }
             }
             lastShakeTime = millis();
+            Serial.println("SHAKE DETECTED! YUM!");
         }
     }
     

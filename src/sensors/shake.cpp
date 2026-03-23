@@ -1,22 +1,48 @@
 #include "shake.h"
 
 ShakeDetector::ShakeDetector() {
-    threshold = 2.5;
-    cooldown = 500;
+    threshold = 8.0;  // Higher threshold for change in acceleration
+    cooldown = 2000;  // 2 seconds cooldown between shakes
     samplesRequired = 3;
     lastShakeTime = 0;
     shakeSampleCount = 0;
+    
+    // Initialize previous values
+    prevAx = 0;
+    prevAy = 0;
+    prevAz = 0;
+    hasPrevValues = false;
 }
 
 bool ShakeDetector::update(float ax, float ay, float az) {
-    float magnitude = calculateMagnitude(ax, ay, az);
+    // Calculate change in acceleration (derivative)
+    float deltaX = 0;
+    float deltaY = 0;
+    float deltaZ = 0;
     
+    if (hasPrevValues) {
+        deltaX = abs(ax - prevAx);
+        deltaY = abs(ay - prevAy);
+        deltaZ = abs(az - prevAz);
+    }
+    
+    // Store current values for next time
+    prevAx = ax;
+    prevAy = ay;
+    prevAz = az;
+    hasPrevValues = true;
+    
+    // Calculate total change magnitude
+    float deltaMagnitude = sqrt(deltaX*deltaX + deltaY*deltaY + deltaZ*deltaZ);
+    
+    // Check cooldown period
     if (millis() - lastShakeTime < cooldown) {
         shakeSampleCount = 0;
         return false;
     }
     
-    if (magnitude > threshold) {
+    // Detect shake based on change in acceleration
+    if (deltaMagnitude > threshold) {
         shakeSampleCount++;
         
         if (shakeSampleCount >= samplesRequired) {
