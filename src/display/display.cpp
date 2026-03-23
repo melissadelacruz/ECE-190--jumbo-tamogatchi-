@@ -27,6 +27,7 @@ bool lastBedState = HIGH;
 unsigned long lastShakeTime = 0;
 
 extern int stepCount;
+extern int playHearts;
 extern int happiness;
 
 //time variables
@@ -99,6 +100,17 @@ static const uint8_t THUNDER_BITMAP[] = {
     0b00111000,
     0b00011000,
     0b00001000
+};
+
+static const uint8_t STAR_BITMAP[] = {
+    0b00010000,
+    0b01010100,
+    0b00111000,
+    0b11111110,
+    0b00111000,
+    0b01010100,
+    0b00010000,
+    0b00000000
 };
 
 //for fullness
@@ -270,12 +282,12 @@ void display_Play() {
     sprintf(stepStr, "Steps: %d", stepCount);
     u8g2.drawStr(4, 28, stepStr);
     
-    // Happiness meter
-    u8g2.drawStr(4, 38, "Mood:");
+    // Play hearts meter
+    u8g2.drawStr(4, 38, "Play:");
 
     // draw bitmap hearts
     for (int i = 0; i < 5; i++) {
-        if (i < happiness) {
+        if (i < playHearts) {
             u8g2.drawXBMP(4 + i * 12, 46, 8, 8, HEART_BITMAP);
         }
     }
@@ -402,7 +414,6 @@ void display_Home() {
     // Normal home screen (no special modes)
     u8g2.clearBuffer();
     u8g2.drawFrame(0, 0, 128, 64);
-    
     u8g2.setFont(u8g2_font_6x10_tr);
 
     // Time UI
@@ -416,12 +427,20 @@ void display_Home() {
     // Date UI
     char dateStr[20];
     sprintf(dateStr, "%02d/%02d", displayMonth, displayDay);
-    u8g2.drawStr(4, 26, dateStr);
+    u8g2.drawStr(55, 12, dateStr);
 
     // Temperature UI
     char tempStr[10];
     sprintf(tempStr, "%d%cF", displayTemp, 176);
     u8g2.drawStr(100, 12, tempStr);
+
+    // Overall happiness meter
+    u8g2.drawStr(4, 35, "Happy:");
+    for (int i = 0; i < 4; i++) {
+        if (i < happiness) {
+            u8g2.drawXBMP(4 + i * 12, 37, 8, 8, STAR_BITMAP);
+        }
+    }
 
     // Pet animation
     updatePetAnimation(isWalking);

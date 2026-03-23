@@ -23,6 +23,7 @@ extern unsigned long heartTimer;
 
 //keep
 extern int stepCount;
+extern int playHearts;
 extern int happiness;
 extern int fullnessLevel;
 extern int energyLevel;

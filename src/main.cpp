@@ -14,6 +14,7 @@ ShakeDetector shakeDetector;
 
 // Global variables for display (defined here)
 int stepCount = 0;
+int playHearts = 0;
 int happiness = 0;
 int fullnessLevel = 0;
 int energyLevel = 0;
@@ -37,6 +38,16 @@ static const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 unsigned long lastWiFiRetry = 0;
 unsigned long lastWeatherFetch = 0;
 const unsigned long WEATHER_INTERVAL = 60000;
+
+static int clampMeter(int value, int minValue, int maxValue) {
+    if (value < minValue) return minValue;
+    if (value > maxValue) return maxValue;
+    return value;
+}
+
+static void updateOverallHappiness() {
+    happiness = clampMeter((playHearts + fullnessLevel + energyLevel) / 3, 0, 5);
+}
 
 void fetchTemperature() {
     if (WiFi.status() != WL_CONNECTED) {
@@ -181,7 +192,7 @@ void loop() {
     if (playMode) {
         if (pedometer.update(ax, ay, az)) {
             stepCount = pedometer.getStepCount();
-            happiness = pedometer.getHappiness();
+            playHearts = pedometer.getHappiness();
             isWalking = true;
         }
     } else {
@@ -193,10 +204,6 @@ void loop() {
         if (shakeDetector.update(ax, ay, az)) {
             if (fullnessLevel < 6) {
                 fullnessLevel++;
-                if (happiness < 5) {
-                    happiness++;
-                    pedometer.setHappiness(happiness);
-                }
             }
             lastShakeTime = millis();
             Serial.println("SHAKE DETECTED! YUM!");
@@ -212,6 +219,8 @@ void loop() {
             }
         }
     }
+
+    updateOverallHappiness();
     
     // UI
     check_buttons();
