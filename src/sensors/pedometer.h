@@ -12,6 +12,7 @@ public:
     
     int getStepCount() { return stepCount; }
     void resetSteps();
+    void setStepCount(int value);
     
     int getHappiness() { return happiness; }
     void setHappiness(int value);

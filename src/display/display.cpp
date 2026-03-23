@@ -29,6 +29,7 @@ unsigned long lastShakeTime = 0;
 extern int stepCount;
 extern int playHearts;
 extern int happiness;
+static const int HOME_HAPPINESS_STARS = 3;
 
 //time variables
 int displayHours = 0;
@@ -280,17 +281,21 @@ void display_Play() {
     // Steps taken by user
     char stepStr[20];
     sprintf(stepStr, "Steps: %d", stepCount);
-    u8g2.drawStr(4, 28, stepStr);
+    u8g2.drawStr(4, 26, stepStr);
     
     // Play hearts meter
-    u8g2.drawStr(4, 38, "Play:");
+    u8g2.drawStr(4, 36, "Play:");
 
     // draw bitmap hearts
     for (int i = 0; i < 5; i++) {
         if (i < playHearts) {
-            u8g2.drawXBMP(4 + i * 12, 46, 8, 8, HEART_BITMAP);
+            u8g2.drawXBMP(4 + i * 12, 42, 8, 8, HEART_BITMAP);
         }
     }
+
+    char playStr[20];
+    sprintf(playStr, "%d/5", playHearts);
+    u8g2.drawStr(4, 60, playStr);
     
     // Show pet in play mode
     updatePetAnimation(isWalking);
@@ -431,12 +436,12 @@ void display_Home() {
 
     // Temperature UI
     char tempStr[10];
-    sprintf(tempStr, "%d%cF", displayTemp, 176);
+    sprintf(tempStr, "%d°F", displayTemp);
     u8g2.drawStr(100, 12, tempStr);
 
     // Overall happiness meter
     u8g2.drawStr(4, 35, "Happy:");
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < HOME_HAPPINESS_STARS; i++) {
         if (i < happiness) {
             u8g2.drawXBMP(4 + i * 12, 37, 8, 8, STAR_BITMAP);
         }

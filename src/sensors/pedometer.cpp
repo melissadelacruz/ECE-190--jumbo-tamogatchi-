@@ -90,6 +90,12 @@ void Pedometer::resetSteps() {
     stepCount = 0;
 }
 
+void Pedometer::setStepCount(int value) {
+    if (value >= 0) {
+        stepCount = value;
+    }
+}
+
 void Pedometer::setWindowSize(int size) {
     delete[] buffer;
     windowSize = size;
@@ -122,4 +128,3 @@ void Pedometer::setHappiness(int value) {
         happiness = value;
     }
 }
-

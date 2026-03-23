@@ -7,10 +7,12 @@
 #include <time.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 
 // Create sensor objects
 Pedometer pedometer;
 ShakeDetector shakeDetector;
+Preferences preferences;
 
 // Global variables for display (defined here)
 int stepCount = 0;
@@ -35,8 +37,17 @@ const char* weatherApiKey = WEATHER_API_KEY;
 
 static const unsigned long WIFI_CONNECT_TIMEOUT_MS = 10000;
 static const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
+static const unsigned long FULLNESS_DECAY_INTERVAL_MS = 10UL * 60UL * 1000UL;
+static const unsigned long ENERGY_DECAY_INTERVAL_MS = 15UL * 60UL * 1000UL;
+static const unsigned long PLAY_DECAY_INTERVAL_MS = 20UL * 60UL * 1000UL;
+static const int MAX_PLAY_HEARTS = 5;
+static const int MAX_FULLNESS = 6;
+static const int MAX_ENERGY = 5;
 unsigned long lastWiFiRetry = 0;
 unsigned long lastWeatherFetch = 0;
+unsigned long lastFullnessDecay = 0;
+unsigned long lastEnergyDecay = 0;
+unsigned long lastPlayDecay = 0;
 const unsigned long WEATHER_INTERVAL = 60000;
 
 static int clampMeter(int value, int minValue, int maxValue) {
@@ -45,8 +56,82 @@ static int clampMeter(int value, int minValue, int maxValue) {
     return value;
 }
 
+static int decayMeter(int value, int amount = 1) {
+    value -= amount;
+    return value < 0 ? 0 : value;
+}
+
+static void loadPetState() {
+    preferences.begin("tama-pet", false);
+
+    stepCount = preferences.getInt("steps", 0);
+    playHearts = clampMeter(preferences.getInt("play", 0), 0, MAX_PLAY_HEARTS);
+    fullnessLevel = clampMeter(preferences.getInt("full", 0), 0, MAX_FULLNESS);
+    energyLevel = clampMeter(preferences.getInt("energy", 0), 0, MAX_ENERGY);
+
+    pedometer.setStepCount(stepCount);
+    pedometer.setHappiness(playHearts);
+
+    unsigned long now = millis();
+    lastFullnessDecay = now;
+    lastEnergyDecay = now;
+    lastPlayDecay = now;
+}
+
+static void savePetStateIfChanged() {
+    static int savedStepCount = -1;
+    static int savedPlayHearts = -1;
+    static int savedFullness = -1;
+    static int savedEnergy = -1;
+
+    if (stepCount != savedStepCount) {
+        preferences.putInt("steps", stepCount);
+        savedStepCount = stepCount;
+    }
+    if (playHearts != savedPlayHearts) {
+        preferences.putInt("play", playHearts);
+        savedPlayHearts = playHearts;
+    }
+    if (fullnessLevel != savedFullness) {
+        preferences.putInt("full", fullnessLevel);
+        savedFullness = fullnessLevel;
+    }
+    if (energyLevel != savedEnergy) {
+        preferences.putInt("energy", energyLevel);
+        savedEnergy = energyLevel;
+    }
+}
+
 static void updateOverallHappiness() {
-    happiness = clampMeter((playHearts + fullnessLevel + energyLevel) / 3, 0, 5);
+    int fullMeters = 0;
+    if (playHearts >= MAX_PLAY_HEARTS) fullMeters++;
+    if (fullnessLevel >= MAX_FULLNESS) fullMeters++;
+    if (energyLevel >= MAX_ENERGY) fullMeters++;
+    happiness = fullMeters;
+}
+
+static void decayPetMetersIfNeeded() {
+    unsigned long now = millis();
+
+    while (now - lastFullnessDecay >= FULLNESS_DECAY_INTERVAL_MS) {
+        fullnessLevel = decayMeter(fullnessLevel);
+        lastFullnessDecay += FULLNESS_DECAY_INTERVAL_MS;
+    }
+
+    while (now - lastPlayDecay >= PLAY_DECAY_INTERVAL_MS) {
+        playHearts = decayMeter(playHearts);
+        pedometer.setHappiness(playHearts);
+        lastPlayDecay += PLAY_DECAY_INTERVAL_MS;
+    }
+
+    if (!isSleeping) {
+        while (now - lastEnergyDecay >= ENERGY_DECAY_INTERVAL_MS) {
+            energyLevel = decayMeter(energyLevel);
+            lastEnergyDecay += ENERGY_DECAY_INTERVAL_MS;
+        }
+    } else {
+        lastEnergyDecay = now;
+    }
 }
 
 void fetchTemperature() {
@@ -105,7 +190,9 @@ void setup() {
     Serial.print("Calibrated baseline: ");
     Serial.println(calibratedBaseline);
     
+    pedometer.begin();
     pedometer.setBaseline(calibratedBaseline);
+    loadPetState();
 
     // shake detector
     shakeDetector.setThreshold(25.0); //delta value set from data recorded based on hand shake
@@ -220,7 +307,9 @@ void loop() {
         }
     }
 
+    decayPetMetersIfNeeded();
     updateOverallHappiness();
+    savePetStateIfChanged();
     
     // UI
     check_buttons();
