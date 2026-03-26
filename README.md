@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 **ECE 190 Project**
 
 
@@ -8,7 +7,8 @@ Below is a Google drive link that includes other types of documentation for this
 Thanks! :D
 
 https://drive.google.com/drive/folders/1MEKUAmXFv2e_WvpG6FI-sjovKOeH6pkQ?usp=drive_link
-=======
+
+
 # ESP32-S3 SPI OLED Test Branch
 
 This branch contains initial firmware testing for:
@@ -41,4 +41,3 @@ Framework: Arduino (PlatformIO)
 
 Purpose:
 Initial display bring-up and modular firmware structure test.
->>>>>>> pedometer
