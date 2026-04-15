@@ -149,6 +149,21 @@ static void updateOverallHappiness() {
     happiness = fullMeters;
 }
 
+static void resetMoodBars() {
+    playHearts = 0;
+    fullnessLevel = 0;
+    energyLevel = 0;
+    happiness = 0;
+    pedometer.setHappiness(0);
+
+    unsigned long now = millis();
+    lastFullnessDecay = now;
+    lastEnergyDecay = now;
+    lastPlayDecay = now;
+
+    Serial.println("Mood bars reset");
+}
+
 static void decayPetMetersIfNeeded() {
     unsigned long now = millis();
 
@@ -355,12 +370,16 @@ void loop() {
         }
     }
 
+    // UI
+    check_buttons();
+    if (consumeMoodResetRequest()) {
+        resetMoodBars();
+    }
+
     decayPetMetersIfNeeded();
     updateOverallHappiness();
     savePetStateIfChanged();
-    
-    // UI
-    check_buttons();
+
     display_Home();
     delay(50);
 }

@@ -24,6 +24,8 @@ unsigned long lastAnim = 0;
 bool lastPlayState = HIGH;
 bool lastFeedState = HIGH;
 bool lastBedState = HIGH;
+bool moodResetRequested = false;
+bool moodResetComboHeld = false;
 unsigned long lastShakeTime = 0;
 
 extern int stepCount;
@@ -210,8 +212,29 @@ void setup_buttons() {
 
 
 void check_buttons() {
-    // Play Button
     bool currentPlayState = digitalRead(BTN_PLAY);
+    bool currentFeedState = digitalRead(BTN_FEED);
+    bool currentBedState = digitalRead(BTN_BED);
+
+    // Press all three buttons together to reset the pet's mood/status bars.
+    bool resetComboPressed = currentPlayState == LOW &&
+                             currentFeedState == LOW &&
+                             currentBedState == LOW;
+    if (resetComboPressed) {
+        if (!moodResetComboHeld) {
+            moodResetRequested = true;
+            moodResetComboHeld = true;
+        }
+
+        lastPlayState = currentPlayState;
+        lastFeedState = currentFeedState;
+        lastBedState = currentBedState;
+        return;
+    }
+
+    moodResetComboHeld = false;
+
+    // Play Button
     if (lastPlayState == HIGH && currentPlayState == LOW) {
         // Enter/exit play mode and leave the other modes cleanly.
         if (!playMode) {
@@ -226,7 +249,6 @@ void check_buttons() {
     lastPlayState = currentPlayState;
 
     // Feed Button
-    bool currentFeedState = digitalRead(BTN_FEED);
     if (lastFeedState == HIGH && currentFeedState == LOW) {
         if (!feedMode) {
             playMode = false;
@@ -240,7 +262,6 @@ void check_buttons() {
     lastFeedState = currentFeedState;
 
     // Sleep Button
-    bool currentBedState = digitalRead(BTN_BED);
     if (lastBedState == HIGH && currentBedState == LOW) {
         playMode = false;
         feedMode = false;
@@ -248,6 +269,15 @@ void check_buttons() {
         isWalking = false;
     }
     lastBedState = currentBedState;
+}
+
+bool consumeMoodResetRequest() {
+    if (!moodResetRequested) {
+        return false;
+    }
+
+    moodResetRequested = false;
+    return true;
 }
 
 void updatePetAnimation(bool isWalking) {
