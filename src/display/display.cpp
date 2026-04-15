@@ -42,7 +42,7 @@ int displayDay = 0;
 int displayTemp =0;
 
 
-// display screen
+// display screen (constructor)
 U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI
 u8g2(U8G2_R0, PIN_CS, PIN_DC, PIN_RES);
 

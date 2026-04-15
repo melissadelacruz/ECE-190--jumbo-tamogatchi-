@@ -29,17 +29,17 @@ void Pedometer::begin() {
 }
 
 
-// ---- needs to be more accurate (improved on accuracy) -----
+// ---- needs to be more accurate (but good on belt) -----
 
 bool Pedometer::update(float ax, float ay, float az) {
     float l1 = calculateL1Norm(ax, ay, az);
     
-    // Add to buffer
+    // Add to buffer (rolling buffer for incoming data)
     buffer[bufIndex] = l1;
     bufIndex = (bufIndex + 1) % windowSize;
     
     float avg = calculateMovingAverage();
-    float dt = avg - baseline;
+    float dt = avg - baseline; //comparing delta to a calibrated baseline (looking for movement above baseline level)
     
     // DEBUG: Print values every 1 second
     static unsigned long lastDebugPrint = 0;
@@ -107,11 +107,11 @@ void Pedometer::setWindowSize(int size) {
     }
 }
 
-float Pedometer::calculateL1Norm(float ax, float ay, float az) {
+float Pedometer::calculateL1Norm(float ax, float ay, float az) { // manhattan distance (ideal for noisy data)
     return abs(ax) + abs(ay) + abs(az);
 }
 
-float Pedometer::calculateMovingAverage() {
+float Pedometer::calculateMovingAverage() { //averages the last several samples
     float avg = 0;
     for (int i = 0; i < windowSize; i++) {
         avg += buffer[i];
@@ -120,7 +120,7 @@ float Pedometer::calculateMovingAverage() {
 }
 
 bool Pedometer::detectStep(float dt) {
-    return dt > 2.0;  // Try changing this to 1.0 or 1.5 if needed
+    return dt > 2.0;  // Try changing this to 1.0 or 1.5 if needed (detects if step is dt is higher than 2.0)
 }
 
 void Pedometer::setHappiness(int value) {
