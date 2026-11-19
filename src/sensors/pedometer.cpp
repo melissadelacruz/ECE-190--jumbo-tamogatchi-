@@ -69,12 +69,11 @@ bool Pedometer::update(float ax, float ay, float az) {
         
         Serial.print("*** STEP DETECTED! *** Total: ");
         Serial.println(stepCount);
-        
+
         if (stepCount % 15 == 0 && stepCount != 0) {
             if (happiness < 5) {
                 happiness++;
-                Serial.print("Happiness increased to: ");
-                Serial.println(happiness);
+                Serial.printf("Play hearts: %d/5 (steps: %d)\n", happiness, stepCount);
             }
         }
     }

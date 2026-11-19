@@ -7,7 +7,7 @@
 
 extern Adafruit_MPU6050 mpu;
 
-void imuSetup();
+bool imuSetup();
 void imuRead(float &ax, float &ay, float &az,
              float &gx, float &gy, float &gz);
 

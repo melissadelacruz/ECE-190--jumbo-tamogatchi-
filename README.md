@@ -41,4 +41,17 @@ Framework: Arduino (PlatformIO)
 
 Purpose:
 Initial display bring-up and modular firmware structure test.
->>>>>>> pedometer
+
+## Firmware navigation
+
+- `src/main.cpp`: Arduino entry points; calls the application.
+- `src/app/app.cpp`: startup, sensor updates, and the main update loop.
+- `src/app/state.h`: the shared runtime `PetState` and meter limits.
+- `src/app/pet.cpp`: pet meter updates and saved state.
+- `src/app/network.cpp`: Wi-Fi, time, and weather.
+- `src/display/`: OLED drawing and button handling.
+- `src/sensors/`: IMU, pedometer, and shake detection.
+
+The application, pet logic, and display currently share one `petState` object.
+The step count and three meters are saved using ESP32 Preferences. Sensor debug
+readings continue to appear in the serial monitor at 115200 baud.

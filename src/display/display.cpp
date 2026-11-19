@@ -1,4 +1,5 @@
 #include "display.h"
+#include "../app/state.h"
 #include <U8g2lib.h>
 #include <SPI.h>
 
@@ -24,11 +25,9 @@ unsigned long lastAnim = 0;
 bool lastPlayState = HIGH;
 bool lastFeedState = HIGH;
 bool lastBedState = HIGH;
-unsigned long lastShakeTime = 0;
+bool moodResetRequested = false;
+bool moodResetComboHeld = false;
 
-extern int stepCount;
-extern int playHearts;
-extern int happiness;
 static const int HOME_HAPPINESS_STARS = 3;
 
 //time variables
@@ -143,7 +142,7 @@ void display_setTime(int h, int m, bool isPM) {
 }
 
 // Modified drawPetSprite with size parameter (scale factor)
-static void drawPetSprite(int x, int y, bool isSleeping = false, float scale = 1.0) {
+static void drawPetSprite(int x, int y, bool sleeping = false, float scale = 1.0) {
     // Calculate scaled dimensions
     int width = 32;
     int height = 26;
@@ -177,7 +176,7 @@ static void drawPetSprite(int x, int y, bool isSleeping = false, float scale = 1
     int eyeOffset = scale * 9;
     int eyeYOffset = y + (scale * 14);
     
-    if (isSleeping) {
+    if (sleeping) {
         // Closed eyes
         u8g2.drawBox(x + (scale * 9), eyeYOffset, scale * 4, scale * 2);
         u8g2.drawBox(x + (scale * 17), eyeYOffset, scale * 4, scale * 2);
@@ -202,6 +201,17 @@ void display_init()
 }
 
 
+void display_startup(const char* status) {
+    u8g2.clearBuffer();
+    u8g2.drawFrame(0, 0, 128, 64);
+    u8g2.setFont(u8g2_font_6x10_tr);
+    u8g2.drawStr(4, 12, "TAMAGOTCHI");
+    drawPetSprite(48, 18);
+    u8g2.drawStr(4, 60, status);
+    u8g2.sendBuffer();
+}
+
+
 void setup_buttons() {
     pinMode(BTN_FEED, INPUT_PULLUP);
     pinMode(BTN_PLAY, INPUT_PULLUP);
@@ -214,44 +224,52 @@ void check_buttons() {
     bool currentPlayState = digitalRead(BTN_PLAY);
     if (lastPlayState == HIGH && currentPlayState == LOW) {
         // Enter/exit play mode and leave the other modes cleanly.
-        if (!playMode) {
-            feedMode = false;
-            isSleeping = false;
+        if (!petState.playMode) {
+            petState.feedMode = false;
+            petState.isSleeping = false;
         }
 
-        playMode = !playMode;
-        isWalking = playMode;
-        heartTimer = millis();
+        petState.playMode = !petState.playMode;
+        petState.isWalking = petState.playMode;
     }
     lastPlayState = currentPlayState;
 
     // Feed Button
     bool currentFeedState = digitalRead(BTN_FEED);
     if (lastFeedState == HIGH && currentFeedState == LOW) {
-        if (!feedMode) {
-            playMode = false;
-            isSleeping = false;
-            isWalking = false;
+        if (!petState.feedMode) {
+            petState.playMode = false;
+            petState.isSleeping = false;
+            petState.isWalking = false;
         } 
 
         // Feed button acts as an enter/exit toggle for feed mode.
-        feedMode = !feedMode;
+        petState.feedMode = !petState.feedMode;
     }
     lastFeedState = currentFeedState;
 
     // Sleep Button
     bool currentBedState = digitalRead(BTN_BED);
     if (lastBedState == HIGH && currentBedState == LOW) {
-        playMode = false;
-        feedMode = false;
-        isSleeping = !isSleeping;
-        isWalking = false;
+        petState.playMode = false;
+        petState.feedMode = false;
+        petState.isSleeping = !petState.isSleeping;
+        petState.isWalking = false;
     }
     lastBedState = currentBedState;
 }
 
-void updatePetAnimation(bool isWalking) {
-    if (!isWalking) {
+bool consumeMoodResetRequest() {
+    if (!moodResetRequested) {
+        return false;
+    }
+
+    moodResetRequested = false;
+    return true;
+}
+
+void updatePetAnimation(bool walking) {
+    if (!walking) {
         petYOffset = 0;
         return;
     }
@@ -280,7 +298,7 @@ void display_Play() {
     
     // Steps taken by user
     char stepStr[20];
-    sprintf(stepStr, "Steps: %d", stepCount);
+    sprintf(stepStr, "Steps: %d", petState.stepCount);
     u8g2.drawStr(4, 26, stepStr);
     
     // Play hearts meter
@@ -288,19 +306,19 @@ void display_Play() {
 
     // draw bitmap hearts
     for (int i = 0; i < 5; i++) {
-        if (i < playHearts) {
+        if (i < petState.playHearts) {
             u8g2.drawXBMP(4 + i * 12, 42, 8, 8, HEART_BITMAP);
         }
     }
 
     char playStr[20];
-    sprintf(playStr, "%d/5", playHearts);
+    sprintf(playStr, "%d/5", petState.playHearts);
     u8g2.drawStr(4, 60, playStr);
     
     // Show pet in play mode
-    updatePetAnimation(isWalking);
+    updatePetAnimation(petState.isWalking);
     int petX = 80;
-    int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
+    int walkShift = (petState.isWalking && millis() % 300 < 150) ? 1 : 0;
     drawPetSprite(petX + walkShift, 32 + petYOffset);
     
     u8g2.sendBuffer();
@@ -321,25 +339,25 @@ void display_Feed() {
     // Fullness bar
     u8g2.drawStr(4, 38, "Fullness:");
     
-    // Draw bananas for fullness level (0-6)
+    // Draw turkey legs for fullness level
     for (int i = 0; i < 6; i++) {
         int x = 4 + i * 12;
         int y = 42;
         
-        if (i < fullnessLevel) {
-            // Filled banana
+        if (i < petState.fullnessLevel) {
+            // Filled ice cream (looks like turkey leg)
             u8g2.drawXBMP(x, y, 8, 8, ICECREAM_BITMAP);
         } 
     }
     
     // Show fullness as text
     char fullnessStr[20];
-    sprintf(fullnessStr, "%d/6", fullnessLevel);
+    sprintf(fullnessStr, "%d/6", petState.fullnessLevel);
     u8g2.drawStr(4, 60, fullnessStr);
     
     // Draw pet with size based on fullness level
     // Scale from 0.8 (skinny) to 1.5 (fat)
-    float petScale = 0.7 + (fullnessLevel * 0.12);  // Min 0.7, Max 1.42
+    float petScale = 0.7 + (petState.fullnessLevel * 0.12);  // Min 0.7, Max 1.42
     if (petScale > 1.4) petScale = 1.4;
     if (petScale < 0.8) petScale = 0.8;
     
@@ -348,8 +366,8 @@ void display_Feed() {
     int petY = 20;
     
     // Show walking animation in feed mode
-    updatePetAnimation(isWalking);
-    int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
+    updatePetAnimation(petState.isWalking);
+    int walkShift = (petState.isWalking && millis() % 300 < 150) ? 1 : 0;
     drawPetSprite(petX + walkShift, petY + petYOffset, false, petScale);    
     
     u8g2.sendBuffer();
@@ -362,9 +380,9 @@ void display_Bed() {
     u8g2.drawFrame(0, 0, 128, 64);
     
     // Draw walking pet on the right with closed eyes (sleeping)
-    updatePetAnimation(isWalking);
+    updatePetAnimation(petState.isWalking);
     int petX = 80;  // Position on the right
-    int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
+    int walkShift = (petState.isWalking && millis() % 300 < 150) ? 1 : 0;
     drawPetSprite(petX + walkShift, 18 + petYOffset, true);  // true = sleeping (closed eyes)
     
     // Add sleeping Z's above pet
@@ -384,7 +402,7 @@ void display_Bed() {
         int x = 4 + i * 12;
         int y = 32;  // Moved higher so bolts are clearly visible
         
-        if (i < energyLevel) {
+        if (i < petState.energyLevel) {
             // Filled thunder bolt
             u8g2.drawXBMP(x, y, 8, 8, THUNDER_BITMAP);
         } 
@@ -392,7 +410,7 @@ void display_Bed() {
     
     // Show energy level as text
     char energyStr[20];
-    sprintf(energyStr, "%d/5", energyLevel);
+    sprintf(energyStr, "%d/5", petState.energyLevel);
     u8g2.drawStr(4, 50, energyStr);
     
     u8g2.sendBuffer();
@@ -401,17 +419,17 @@ void display_Bed() {
 // Update display_Home() to be the main dispatcher
 void display_Home() {
     // Check states in priority order
-    if (isSleeping) {
+    if (petState.isSleeping) {
         display_Bed();
         return;
     }
     
-    if (playMode) {
+    if (petState.playMode) {
         display_Play();
         return;
     }
 
-    if(feedMode) {
+    if(petState.feedMode) {
         display_Feed();
         return;
     }
@@ -439,18 +457,18 @@ void display_Home() {
     sprintf(tempStr, "%d°F", displayTemp);
     u8g2.drawStr(100, 12, tempStr);
 
-    // Overall happiness meter
+    // Overall petState.happiness meter
     u8g2.drawStr(4, 35, "Happy:");
     for (int i = 0; i < HOME_HAPPINESS_STARS; i++) {
-        if (i < happiness) {
+        if (i < petState.happiness) {
             u8g2.drawXBMP(4 + i * 12, 37, 8, 8, STAR_BITMAP);
         }
     }
 
     // Pet animation
-    updatePetAnimation(isWalking);
+    updatePetAnimation(petState.isWalking);
     int petX = 48;
-    int walkShift = (isWalking && millis() % 300 < 150) ? 1 : 0;
+    int walkShift = (petState.isWalking && millis() % 300 < 150) ? 1 : 0;
     drawPetSprite(petX + walkShift, 18 + petYOffset);
 
     // Button labels
